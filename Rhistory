@@ -1,6 +1,0 @@
-library(readr)
-real_estate_db <- read_csv("real_estate_db.csv")
-View(real_estate_db)
-cls
-clear
-R.version
