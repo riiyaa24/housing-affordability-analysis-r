@@ -1,1 +1,11 @@
 # housing-affordability-analysis-r
+
+This project presents a comprehensive statistical analysis of housing affordability, income, education, and socioeconomic indicators across U.S. Census places using a publicly available Kaggle dataset based on the American Community Survey (ACS). The objective was to explore how demographic, income, and housing-related variables interact and to identify key factors influencing housing outcomes such as rent levels, home equity, and household income.
+
+The analysis was conducted entirely in R, beginning with data preprocessing steps that included handling missing values, converting categorical variables to factors, removing duplicates, and standardizing fields to ensure consistency. Exploratory Data Analysis (EDA) was performed using summary statistics and visualizations such as histograms, boxplots, scatterplots, bar charts, and correlation heatmaps to uncover patterns, skewness, and relationships among variables like income, rent, debt, education, and population.
+
+A core component of the project was the implementation of linear regression modeling to quantify the relationship between mean household income (predictor) and mean rent (response variable). The regression results demonstrated a strong and statistically significant positive relationship, with income explaining a substantial portion of the variation in rent levels (R² ≈ 0.57). Model assumptions were evaluated using residual diagnostics, and limitations such as heteroscedasticity at higher income levels were acknowledged in the interpretation.
+
+In addition to linear regression, the project employed chi-square tests of independence to analyze relationships between education attainment and geographic variables, as well as probability-based methods including Poisson distributions, conditional probability, and Bayes’ theorem to study high-rent and high-income patterns across regions. Together, these methods provided a well-rounded statistical investigation of housing affordability and socioeconomic inequality in the United States.
+
+Overall, this project demonstrates the use of R for data cleaning, visualization, statistical modeling, and interpretation, with a strong emphasis on real-world policy-relevant insights derived from large-scale survey data.
