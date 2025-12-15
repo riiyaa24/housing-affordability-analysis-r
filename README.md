@@ -1,6 +1,6 @@
 # housing-affordability-analysis-r
 
-This project involves an in-depth statistical analysis of a Real Estate dataset obtained from *Kaggle: https://www.kaggle.com/datasets/rooorytaip/real-estate-dataset *
+This project involves an in-depth statistical analysis of a Real Estate dataset obtained from Kaggle: https://www.kaggle.com/datasets/rooorytaip/real-estate-dataset 
 . The dataset consists of property listings and attributes related to housing and real estate markets, which were used to explore relationships between housing characteristics and price indicators for analytical modeling and prediction. 
 Kaggle
 
