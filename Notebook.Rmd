@@ -1,0 +1,734 @@
+## Exploring Housing Affordability, Equity, and Socioeconomic Indicators in U.S. Census Places: *A Statistical Investigation Using ACS Mortgage, Equity, Loans, and Rent Data*
+
+**Group 14**
+
+**Team Members:**
+
+1.  Riya Parag Dhanduke
+
+2.  Yash Nimish Padhye
+
+## Problem Statement 
+
+The goal of this project is to investigate the statistical relationships between demographic attributes, income measures, education levels, and housing outcomes across U.S. census locations. Specifically, we aim to determine which variables significantly predict home equity, gross rent, and household income through descriptive analysis, correlation assessment, and regression modeling. Additionally, we will compare housing and debt patterns across geographic regions to identify meaningful differences in affordability and socioeconomic conditions.
+
+## Importing the Dataset
+
+```{r}
+df <- read.csv("real_estate_db.csv")
+```
+
+## Going through the rows present in the dataset
+
+```{r}
+head(df, 10)
+```
+
+```{r}
+# View structure of dataset (types of each variable)
+str(df)
+```
+
+## Keeping only necessary columns 
+
+```{r}
+columns <- c(
+  "UID","STATEID","BLOCKID","state","state_ab","county","city","place","type","primary",
+  "zip_code","area_code","lat","lng","ALand","AWater","pop","male_pop","female_pop",
+  "second_mortgage","home_equity","home_equity_second_mortgage","debt",
+  "second_mortgage_cdf","home_equity_cdf","debt_cdf",
+  "hs_degree","hs_degree_male","hs_degree_female",
+  "hc_mortgage_mean","hc_mortgage_median","hc_mortgage_stdev",
+  "hc_mortgage_sample","hc_mortgage_sample_weight",
+  "hc_mean","hc_median","hc_stdev","hc_samples","hc_sample_weight",
+  "rent_mean","rent_median","rent_stdev","rent_samples","rent_sample_weight",
+  "rent_gt_10","rent_gt_15","rent_gt_20","rent_gt_25","rent_gt_30",
+  "rent_gt_35","rent_gt_40","rent_gt_50","rent_universe_samples","rent_used_samples",
+  "family_income_mean","family_income_median","family_income_stdev","family_income_families",
+  "hi_mean","hi_median","hi_stdev","hi_samples","hi_sample_weight"
+)
+```
+
+```{r}
+col_mapping <- c(
+  "family_mean" = "family_income_mean",
+  "family_median" = "family_income_median",
+  "family_stdev" = "family_income_stdev",
+  "family_samples" = "family_income_families",
+  "universe_samples" = "rent_universe_samples",
+  "used_samples" = "rent_used_samples",
+  "hc_mortgage_samples" = "hc_mortgage_sample",
+  "hc_mortgage_sample_weight" = "hc_mortgage_sample_weight"
+)
+```
+
+```{r}
+names(df) <- ifelse(names(df) %in% names(col_mapping), col_mapping[names(df)], names(df))
+```
+
+```{r}
+df_filtered <- df[, intersect(names(df), columns)]
+```
+
+```{r}
+colnames(df_filtered)
+```
+
+## Summary of Data Frame
+
+```{r}
+summary(df_filtered)
+```
+
+## Checking Null Values 
+
+```{r}
+na_counts <- sapply(df_filtered, function(x) sum(is.na(x)))
+na_counts[na_counts > 0]
+```
+
+```{r}
+df_filtered$BLOCKID <- NULL
+```
+
+**A. Numeric columns** – replace NA with median
+
+```{r}
+numeric_cols <- sapply(df_filtered, is.numeric)
+```
+
+```{r}
+df_filtered[numeric_cols] <- lapply(df_filtered[numeric_cols], function(x) {
+  x[is.na(x)] <- median(x, na.rm = TRUE)
+  return(x)
+})
+```
+
+**B. Character columns** – replace NA with `"Unknown"`
+
+```{r}
+char_cols <- sapply(df_filtered, is.character)
+```
+
+```{r}
+df_filtered[char_cols] <- lapply(df_filtered[char_cols], function(x) {
+  x[is.na(x)] <- "Unknown"
+  return(x)
+})
+```
+
+```{r}
+sum(is.na(df_filtered))  # Should return 0
+```
+
+# 1. **Remove duplicate rows**
+
+```{r}
+df_filtered <- df_filtered[!duplicated(df_filtered), ]
+```
+
+5. **Convert ZIP code to character (not numeric)**
+
+```{r}
+if ("zip_code" %in% names(df_filtered)) {
+  df_filtered$zip_code <- as.character(df_filtered$zip_code)
+}
+```
+
+```{r}
+install.packages("ggplot2")
+library(ggplot2)
+```
+
+```{r}
+install.packages("dplyr")
+library(dplyr)
+```
+
+```{r}
+# Loading Libraries
+if (!require("pacman")) install.packages("pacman") 
+pacman::p_load(tidyverse, skimr, GGally, plotly, viridis, caret, randomForest, e1071, rpart, 
+               xgboost, h2o, corrplot, rpart.plot, corrgram, lightgbm, ggplot2, highcharter, 
+               ggthemes, psych, scales, treemap, treemapify, repr, cowplot, magrittr, ggpubr,
+               RColorBrewer, plotrix, ggrepel, tidyverse, gridExtra, reshape2, janitor)
+
+lst <- c(
+    "tidyverse", "skimr", "GGally", "plotly", "viridis", "caret", "randomForest", "e1071", "rpart", 
+               "xgboost", "h2o", "corrplot", "rpart.plot", "corrgram", "lightgbm", "ggplot2", "highcharter", 
+               "ggthemes", "psych", "scales", "treemap", "treemapify", "repr", "cowplot", "magrittr", "ggpubr",
+               "RColorBrewer", "plotrix", "ggrepel", "tidyverse", "gridExtra", "reshape2", "janitor", "descr", "dplyr","boot","maps", "tidyquant",
+    "wesanderson"
+)
+
+as_tibble(installed.packages())  %>% select(Package, Version)  %>% filter(Package %in% lst)
+```
+
+```{r}
+numerics <- select_if(df_filtered, is.numeric)
+colnames(numerics) 
+```
+
+## Distribution Plots
+
+```{r}
+names(df_filtered)
+```
+
+```{r}
+subset.family <- numerics %>% 
+  filter(!is.na(family_income_mean))
+```
+
+```{r}
+p_family <- ggplot(data = subset.family, aes(x = family_income_mean)) +
+  geom_histogram(aes(y = ..density..), bins = 40, fill = "#58ACFA") +
+  stat_function(
+    fun = dnorm,
+    color = "black",
+    args = list(
+      mean = mean(subset.family$family_income_mean),
+      sd   = sd(subset.family$family_income_mean)
+    )
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  labs(
+    title = "Distribution of Family Mean Income",
+    x = "Family Mean Income",
+    y = "Probability Density"
+  )
+```
+
+```{r}
+p_family
+```
+
+```{r}
+subset.debt <- numerics %>%
+  filter(!is.na(debt))
+```
+
+```{r}
+p3 <- ggplot(data=subset.debt, aes(x=debt))+
+  geom_histogram(aes(y=..density..), bins = 40, fill="#FA5858")+
+  stat_function(fun=dnorm, color="black",
+                args=list(mean=mean(subset.debt$debt), 
+                          sd=sd(subset.debt$debt))) + theme_minimal() + 
+theme(plot.title=element_text(hjust=0.5)) + labs(title="Left Skewed Distribution", 
+                                                x="Debt", y="Probability")
+```
+
+```{r}
+
+p3
+```
+
+```{r}
+# Set plotting layout: 5 rows, 1 column
+par(mfrow = c(5, 1), mar = c(4, 4, 3, 1))
+
+```
+
+```{r}
+plot_dist <- function(x, var_name) {
+  
+  # Remove missing values
+  x <- x[!is.na(x)]
+  
+  # Histogram + density
+  hist(x, 
+       probability = TRUE,
+       col = "lightblue",
+       border = "white",
+       main = paste("Distribution of", var_name),
+       xlab = var_name)
+  
+  # Density curve
+  lines(density(x), lwd = 2, col = "blue")
+
+}
+```
+
+```{r}
+plot_dist(df$family_income_mean, "family_income_mean")
+```
+
+```{r}
+plot_dist(df$hi_mean, "hi_mean")
+```
+
+```{r}
+plot_dist(df$debt, "debt")
+```
+
+```{r}
+plot_dist(df$hs_degree, "hs_degree")
+```
+
+## Relationship Plots 
+
+```{r}
+# Set layout: 3 rows, 1 column
+par(mfrow = c(3, 1), mar = c(4, 4, 3, 1))
+
+# Helper function for scatter plots
+scatter_plot <- function(x, y, xlab, ylab, title) {
+  
+  # Remove NA values
+  valid <- complete.cases(x, y)
+  x <- x[valid]
+  y <- y[valid]
+  
+  # Scatter plot
+  plot(x, y,
+       pch = 16, col = "darkblue",
+       xlab = xlab, ylab = ylab,
+       main = title)
+  
+  # Regression line
+  abline(lm(y ~ x), col = "red", lwd = 2)
+}
+
+# 1️⃣ Income vs Rent
+scatter_plot(df$hi_mean,
+             df$rent_mean,
+             "Household Income (hi_mean)",
+             "Rent Mean",
+             "Income vs Rent")
+
+# 2️⃣ Debt vs Income
+scatter_plot(df$hi_mean,
+             df$debt,
+             "Household Income (hi_mean)",
+             "Debt",
+             "Debt vs Income")
+
+# 3️⃣ Education vs Income
+scatter_plot(df$hs_degree,
+             df$hi_mean,
+             "High School Degree Rate (hs_degree)",
+             "Household Income (hi_mean)",
+             "Education vs Income")
+
+```
+
+## Top 10 cities by Population
+
+```{r}
+# Aggregate population by city
+city_pop <- tapply(df$pop, df$city, sum, na.rm = TRUE)
+
+# Sort and select top 10
+top10 <- sort(city_pop, decreasing = TRUE)[1:10]
+
+# Barplot
+barplot(top10,
+        las = 3,
+        col = "steelblue",
+        main = "Top 10 Cities by Total Population",
+        ylab = "Population",
+        cex.names = 0.8)
+
+```
+
+```{r}
+# Compute median income per state
+state_income <- tapply(df$hi_mean, df$state_ab, median, na.rm = TRUE)
+
+# Sort states by median income (highest first)
+state_income_sorted <- sort(state_income, decreasing = TRUE)
+
+# Select top 10 states
+top10_states <- state_income_sorted[1:10]
+
+# Barplot of Top 10 states
+barplot(top10_states,
+        las = 2,
+        col = "darkgreen",
+        main = "Top 10 States by Median Household Income",
+        ylab = "Median Income",
+        cex.names = 0.9)
+
+
+```
+
+```{r}
+rent_brackets <- c("rent_gt_10", "rent_gt_15", "rent_gt_20", 
+                   "rent_gt_25", "rent_gt_30", "rent_gt_35", 
+                   "rent_gt_40", "rent_gt_50")
+
+# Calculate mean for each bracket
+rent_vals <- sapply(df[rent_brackets], function(x) mean(x, na.rm = TRUE))
+
+# Barplot
+barplot(rent_vals,
+        names.arg = rent_brackets,
+        las = 2,
+        col = "tomato",
+        main = "Rent Burden Brackets (Mean Proportion)",
+        ylab = "Average Proportion",
+        cex.names = 0.8)
+
+```
+
+## Measure Of Variabliity 
+
+```{r}
+variability <- function(x) {
+  x <- x[!is.na(x)]   # remove missing values
+  
+  range_val <- range(x)
+  
+  data.frame(
+    Range_Min = range_val[1],
+    Range_Max = range_val[2],
+    Range = diff(range_val),
+    Variance = var(x),
+    Std_Dev = sd(x)
+  )
+}
+```
+
+```{r}
+variability(df$rent_mean)
+```
+
+```{r}
+variability(df$family_income_mean)
+```
+
+## Central Tendency
+
+```{r}
+central_tendency <- function(x) {
+  x <- x[!is.na(x)]   # remove missing values
+  
+  # Mode function for numeric vectors
+  mode_val <- as.numeric(names(sort(table(x), decreasing = TRUE))[1])
+  
+  data.frame(
+    Mean = mean(x),
+    Median = median(x),
+    Mode = mode_val
+  )
+}
+```
+
+```{r}
+central_tendency(df$rent_mean)
+```
+
+## Probability
+
+```{r}
+# Remove NAs
+df_clean <- df[complete.cases(df$hi_mean), ]
+
+# Threshold
+income_med <- median(df_clean$hi_mean)
+
+# Event
+is_high_income <- df_clean$hi_mean > income_med
+
+# Probability
+P_high_income <- mean(is_high_income)
+P_high_income
+
+```
+
+## Conditional Probability 
+
+```{r}
+# Thresholds
+rent_med   <- median(df$rent_mean, na.rm = TRUE)
+income_med <- median(df$hi_mean, na.rm = TRUE)
+
+# Events
+A <- df$hi_mean > income_med   # High income
+B <- df$rent_mean > rent_med   # High rent
+
+# Remove rows with missing values in A or B
+valid <- complete.cases(A, B)
+
+# Conditional probability P(B | A)
+P_B_given_A <- mean(B[valid] & A[valid]) / mean(A[valid])
+P_B_given_A
+```
+
+## Bayes Theorem 
+
+```{r}
+# Using same A (high income) and B (high rent)
+pA  <- mean(A[valid])
+pB  <- mean(B[valid])
+pB_given_A <- mean(A[valid] & B[valid]) / pA
+
+# Bayes: P(A|B) = P(B|A) * P(A) / P(B)
+P_A_given_B_bayes <- pB_given_A * pA / pB
+P_A_given_B_bayes
+```
+
+## Chi Square 
+
+```{r}
+data.frame(Column = colnames(df_filtered), Type = sapply(df_filtered, class))
+```
+
+```{r}
+df_filtered
+```
+
+```{r}
+categoricals <- df_filtered[, sapply(df_filtered, function(x) is.factor(x) || is.character(x))]
+colnames(categoricals)
+```
+
+```{r}
+mytable <- table(categoricals$type, categoricals$state)
+summary(mytable) # chi-square test of indepedence
+```
+
+```{r}
+library(descr)
+# There might be a problem with the NAS
+type_state <- df_filtered %>% filter(!is.na(type), !is.na(state)) 
+
+CrossTable(type_state$state, type_state$type, prop.c=TRUE, prop.chisq=TRUE, prop.t=TRUE)
+```
+
+```{r}
+# Make sure dplyr is loaded
+library(dplyr)
+
+# Example: compute 95% confidence interval for rent_mean in New York
+state_var <- "state"       # grouping variable
+numeric_var <- "rent_mean" # numeric variable for CI
+target_state <- "New York" # the specific group
+confidence <- 0.95         # confidence level
+```
+
+```{r}
+df_sample <- df_filtered %>%
+  select(all_of(state_var), all_of(numeric_var)) %>%
+  filter((.data[[state_var]] == target_state), !is.na(.data[[numeric_var]]))
+```
+
+```{r}
+# Sample size
+n <- nrow(df_sample)
+
+# Sample mean
+x_bar <- mean(df_sample[[numeric_var]])
+
+# Sample standard deviation
+s <- sd(df_sample[[numeric_var]])
+
+# Degrees of freedom
+dfree <- n - 1
+
+# t-score for 2-tailed 95% confidence
+alpha <- 1 - confidence
+t_score <- qt(1 - alpha/2, df = dfree)
+
+```
+
+```{r}
+lower_bound <- x_bar - t_score * (s / sqrt(n))
+upper_bound <- x_bar + t_score * (s / sqrt(n))
+
+cat("95% CI for", numeric_var, "in", target_state, "is [", round(lower_bound,2), ",", round(upper_bound,2), "]\n")
+```
+
+```{r}
+# Function to compute CI
+compute_ci <- function(data, state_name, num_var, conf=0.95){
+  df_s <- data %>% filter((.data[[state_var]] == state_name), !is.na(.data[[num_var]]))
+  n <- nrow(df_s)
+  x_bar <- mean(df_s[[num_var]])
+  s <- sd(df_s[[num_var]])
+  dfree <- n - 1
+  t_score <- qt(1 - (1-conf)/2, df=dfree)
+  lower <- x_bar - t_score*(s/sqrt(n))
+  upper <- x_bar + t_score*(s/sqrt(n))
+  return(data.frame(State=state_name, Mean=x_bar, Lower=lower, Upper=upper))
+}
+
+# Example: California and New York
+rbind(
+  compute_ci(df_filtered, "California", "rent_mean"),
+  compute_ci(df_filtered, "New York", "rent_mean")
+)
+
+```
+
+## Normal Distribution
+
+```{r}
+par(mfrow=c(2,2))  # 2x2 layout
+
+# rent_mean
+hist(df_filtered$rent_mean, probability=TRUE, col="lightblue")
+curve(dnorm(x, mean=mean(df_filtered$rent_mean, na.rm=TRUE), 
+            sd=sd(df_filtered$rent_mean, na.rm=TRUE)), add=TRUE, col="red")
+
+# hi_mean
+hist(df_filtered$hi_mean, probability=TRUE, col="orange")
+curve(dnorm(x, mean=mean(df_filtered$hi_mean, na.rm=TRUE), 
+            sd=sd(df_filtered$hi_mean, na.rm=TRUE)), add=TRUE, col="blue")
+
+
+```
+
+## Binomial Distribution
+
+```{r}
+# Approximate number of people with HS degree
+n_total <- 100  # hypothetical sample size
+p_success <- mean(df_filtered$hs_degree, na.rm=TRUE)
+k <- 70         # e.g., 70% success
+
+# Probability of exactly k successes
+dbinom(k, size=n_total, prob=p_success)
+```
+
+## Poisson Distribution
+
+```{r}
+lambda <- mean(df_filtered$debt, na.rm=TRUE)  # average number of debts
+k <- 5  # number of events
+dpois(k, lambda)
+```
+
+## T Distribution
+
+```{r}
+library(dplyr)
+
+state_sample <- df_filtered %>%
+  filter(state == "New York") %>%
+  sample_n(20)  # small sample
+
+x_bar <- mean(state_sample$rent_mean, na.rm=TRUE)
+s <- sd(state_sample$rent_mean, na.rm=TRUE)
+n <- nrow(state_sample)
+t_score <- qt(0.975, df=n-1)
+
+ci_lower <- x_bar - t_score * (s/sqrt(n))
+ci_upper <- x_bar + t_score * (s/sqrt(n))
+cat("95% CI for rent_mean in New York:", round(ci_lower,2), "-", round(ci_upper,2))
+```
+
+## CI for population Mean
+
+```{r}
+# Sample mean and standard deviation
+x_bar <- mean(df_filtered$rent_mean, na.rm = TRUE)
+s <- sd(df_filtered$rent_mean, na.rm = TRUE)
+n <- sum(!is.na(df_filtered$rent_mean))
+
+# 95% CI using t-distribution
+t_score <- qt(0.975, df = n-1)
+ci_lower <- x_bar - t_score * (s / sqrt(n))
+ci_upper <- x_bar + t_score * (s / sqrt(n))
+
+cat("95% CI for population mean of rent_mean:", round(ci_lower,2), "-", round(ci_upper,2))
+```
+
+## Confidence Interval for Population Proportion
+
+```{r}
+# Remove NA
+hs <- df_filtered$hs_degree[!is.na(df_filtered$hs_degree)]
+
+# Sample size and sample proportion
+n <- length(hs)
+p_hat <- mean(hs)
+
+# 95% CI
+z <- qnorm(0.975)
+ci_lower <- p_hat - z * sqrt(p_hat * (1 - p_hat) / n)
+ci_upper <- p_hat + z * sqrt(p_hat * (1 - p_hat) / n)
+
+cat("95% CI for population proportion of hs_degree:", round(ci_lower,4), "-", round(ci_upper,4))
+```
+
+## Confidence Interval for Difference Between Two Means
+
+```{r}
+library(dplyr)
+
+# Subset data
+two_states <- df_filtered %>%
+  filter(state %in% c("California", "New York")) %>%
+  select(state, rent_mean) %>%
+  filter(!is.na(rent_mean))
+
+# Means and standard deviations
+mean_CA <- mean(two_states$rent_mean[two_states$state=="California"])
+mean_NY <- mean(two_states$rent_mean[two_states$state=="New York"])
+sd_CA <- sd(two_states$rent_mean[two_states$state=="California"])
+sd_NY <- sd(two_states$rent_mean[two_states$state=="New York"])
+n_CA <- sum(two_states$state=="California")
+n_NY <- sum(two_states$state=="New York")
+
+# Standard error
+se_diff <- sqrt((sd_CA^2 / n_CA) + (sd_NY^2 / n_NY))
+
+# 95% CI
+t_score <- qt(0.975, df = min(n_CA, n_NY) - 1)
+ci_lower <- (mean_CA - mean_NY) - t_score * se_diff
+ci_upper <- (mean_CA - mean_NY) + t_score * se_diff
+
+cat("95% CI for difference in rent_mean (CA - NY):", round(ci_lower,2), "-", round(ci_upper,2))
+```
+
+## Confidence Interval for Difference Between Two Proportions
+
+```{r}
+# Subset
+hs_two <- df_filtered %>% filter(state %in% c("California", "New York"))
+
+p1 <- mean(hs_two$hs_degree[hs_two$state=="California"], na.rm=TRUE)
+p2 <- mean(hs_two$hs_degree[hs_two$state=="New York"], na.rm=TRUE)
+n1 <- sum(!is.na(hs_two$hs_degree[hs_two$state=="California"]))
+n2 <- sum(!is.na(hs_two$hs_degree[hs_two$state=="New York"]))
+
+# Standard error
+se <- sqrt((p1*(1-p1)/n1) + (p2*(1-p2)/n2))
+
+# 95% CI
+z <- qnorm(0.975)
+ci_lower <- (p1 - p2) - z * se
+ci_upper <- (p1 - p2) + z * se
+
+cat("95% CI for difference in hs_degree proportion (CA - NY):", round(ci_lower,4), "-", round(ci_upper,4))
+```
+
+```{r}
+# Boxplots of means of florida and texas
+options(repr.plot.width=8, repr.plot.height=5)
+
+
+south_states <- df_filtered %>% select(state, rent_mean) %>% filter(state == "Texas" | state == "Florida") %>%
+ggplot(aes(x=state, y=rent_mean, fill=state)) + geom_boxplot() + 
+stat_summary(fun.y=mean, colour="orange", geom="point", size=1) + 
+theme_minimal() + 
+theme(plot.title=element_text(hjust=0.5, size=10)) + 
+labs(title="Difference Between Two Independent Means", y="Rent Mean", x="States") + 
+scale_fill_brewer(palette="Set3")
+
+south_states
+```
+
+```{r}
+# A small summary of the average rent mean per state
+library(dplyr)
+
+all_avg <- df_filtered %>% select(state, rent_mean) %>% group_by(state) %>% filter(!is.na(rent_mean)) %>% 
+filter(state == "New York" | state == "California"| state == "Florida" | state == "Texas") %>%
+summarise(avg=mean(rent_mean), Count=n(), std=sd(rent_mean))
+
+
+all_avg
+```
